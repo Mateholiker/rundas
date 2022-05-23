@@ -15,6 +15,7 @@ use indexing::DataFrameColumnIndex;
 mod frame_extension;
 mod group;
 pub use group::Groups;
+mod file_io;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataFrame {
