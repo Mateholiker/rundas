@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::{collections::HashMap, hash::Hash, ops::Not};
 
@@ -70,6 +71,22 @@ impl DataFrame {
         self.header.remove(index);
         for line in self.data.iter_mut() {
             line.remove(index);
+        }
+    }
+
+    pub fn drop_all_column_except<I>(&mut self, indizes: &[I])
+    where
+        I: DataFrameColumnIndex,
+    {
+        let to_keep: BTreeSet<usize> = indizes.iter().map(|i| i.get_usize(&self.header)).collect();
+        let keep_mask = (0..self.header.len())
+            .map(|i| to_keep.contains(&i))
+            .collect::<Vec<bool>>();
+        let mut keep_mask_iter = keep_mask.iter();
+        self.header.retain(|_| *keep_mask_iter.next().unwrap());
+        for line in self.data.iter_mut() {
+            let mut keep_mask_iter = keep_mask.iter();
+            line.retain(|_| *keep_mask_iter.next().unwrap());
         }
     }
 
