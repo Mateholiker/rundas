@@ -14,7 +14,7 @@ impl<'s> DataFrameColumnIndex for &'s str {
         if let Some((index, _)) = header
             .iter()
             .enumerate()
-            .find(|(_i, string)| self == string)
+            .find(|(_i, string)| self == *string)
         {
             index
         } else {

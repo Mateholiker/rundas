@@ -6,12 +6,12 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Data {
-    String(String),
+    String(Box<String>),
     Integer(i32),
     Float(f32),
     Boolean(bool),
     Date(SimpleDateTime),
-    Vector(Vec<Data>),
+    Vector(Box<Vec<Data>>),
     Vec2D((f32, f32)),
 }
 
@@ -120,7 +120,7 @@ impl From<String> for Data {
                 return Vec2D((x, y));
             }
         }
-        String(string)
+        String(Box::new(string))
     }
 }
 //todo build makro for this

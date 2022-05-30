@@ -67,7 +67,7 @@ impl DataFrame {
         let mut header = Vec::new();
         for data in raw_header {
             if let Data::String(string) = data {
-                header.push(string);
+                header.push(Box::<String>::into_inner(string));
             } else {
                 return Err(IoError::other("File has no valid Header"));
             }
@@ -162,7 +162,7 @@ impl Iterator for ChunkIter {
                 let inner_iterator = ChunkIter::from_string(chunk, self.seperator);
                 self.string = rest.trim().chars().skip(1).collect();
 
-                let data_vec = inner_iterator.collect();
+                let data_vec = Box::new(inner_iterator.collect());
 
                 Some(Data::Vector(data_vec))
             } else {

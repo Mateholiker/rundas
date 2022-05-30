@@ -47,7 +47,7 @@ impl<'df> Index<&str> for Line<'df> {
             .header
             .iter()
             .enumerate()
-            .find(|(_i, string)| &index == string)
+            .find(|(_i, string)| index == *string)
         {
             &self[index]
         } else {
