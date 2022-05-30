@@ -8,7 +8,7 @@ mod view;
 pub use view::View;
 use view::ViewType;
 mod data;
-pub use data::Data;
+pub use data::{Data, SimpleDateTime};
 mod line;
 pub use line::Line;
 mod indexing;

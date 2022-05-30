@@ -8,4 +8,4 @@
 #![feature(type_alias_impl_trait)]
 
 mod data_frame;
-pub use data_frame::{Data, DataFrame};
+pub use data_frame::{Data, DataFrame, SimpleDateTime};
