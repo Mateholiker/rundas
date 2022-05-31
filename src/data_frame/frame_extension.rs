@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::{Data, DataFrame};
-
-use super::{BaseDataFrame, InnerDataFrame};
+use super::{BaseDataFrame, Data, DataFrame, InnerDataFrame};
 
 impl DataFrame {
     pub fn append_line(self: Arc<Self>, line: Vec<Data>) -> Arc<DataFrame> {

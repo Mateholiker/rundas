@@ -1,7 +1,6 @@
 use std::fmt::Write;
 
-use super::{BaseDataFrame, InnerDataFrame};
-use crate::{Data, DataFrame};
+use super::{BaseDataFrame, Data, DataFrame, InnerDataFrame};
 use std::sync::Arc;
 use std::{
     fs::File,
