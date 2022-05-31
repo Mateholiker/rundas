@@ -9,4 +9,4 @@
 #![feature(box_into_inner)]
 
 mod data_frame;
-pub use data_frame::{Data, DataFrame, SimpleDateTime};
+pub use data_frame::{Data, DataFrame, Groups, SimpleDateTime};

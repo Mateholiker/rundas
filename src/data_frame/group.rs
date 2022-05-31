@@ -1,24 +1,25 @@
 use std::{
     collections::HashMap,
     hash::Hash,
-    ops::{Deref, DerefMut, Not},
+    ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
-use crate::DataFrame;
+use super::DataFrame;
 
 pub struct Groups<G: Eq + Hash> {
-    groups: Vec<(G, DataFrame)>,
+    groups: Vec<(G, Arc<DataFrame>)>,
 }
 
 impl<G: Eq + Hash> Groups<G> {
-    pub(super) fn new(groups: Vec<(G, DataFrame)>) -> Groups<G> {
+    pub(super) fn new(groups: Vec<(G, Arc<DataFrame>)>) -> Groups<G> {
         Groups { groups }
     }
 
     ///(group lenght, number of groups with that lenght)
     pub fn distribution(&self) -> Vec<(usize, u32)> {
         let mut map = HashMap::new();
-        for (_key, group) in self.iter() {
+        for (_key, group) in self.groups.iter() {
             let num: &mut u32 = map.entry(group.len()).or_default();
             *num += 1;
         }
@@ -30,25 +31,14 @@ impl<G: Eq + Hash> Groups<G> {
 
     pub fn filter<F>(&mut self, mut filter: F)
     where
-        F: FnMut(&(G, DataFrame)) -> bool,
+        F: FnMut(&(G, Arc<DataFrame>)) -> bool,
     {
         self.groups.drain_filter(|group| !filter(group));
-    }
-
-    pub fn filter_unstable<F>(&mut self, mut filter: F)
-    where
-        F: FnMut(&(G, DataFrame)) -> bool,
-    {
-        for index in (0..self.groups.len()).rev() {
-            if filter(&self.groups[index]).not() {
-                self.groups.swap_remove(index);
-            } //else keep
-        }
     }
 }
 
 impl<G: Eq + Hash> Deref for Groups<G> {
-    type Target = Vec<(G, DataFrame)>;
+    type Target = Vec<(G, Arc<DataFrame>)>;
 
     fn deref(&self) -> &Self::Target {
         &self.groups

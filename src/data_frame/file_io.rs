@@ -1,15 +1,38 @@
 use std::fmt::Write;
 
+use super::{BaseDataFrame, InnerDataFrame};
+use crate::{Data, DataFrame};
+use std::sync::Arc;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error as IoError},
     path::Path,
 };
 
-use crate::{Data, DataFrame};
-
 impl DataFrame {
-    pub fn from_file(path: &Path, seperator: Option<char>) -> Result<DataFrame, IoError> {
+    pub fn from_file(path: &Path, seperator: Option<char>) -> Result<Arc<DataFrame>, IoError> {
+        let base = BaseDataFrame::from_file(path, seperator)?;
+        Ok(Arc::new(DataFrame {
+            inner: InnerDataFrame::Base { df: base },
+        }))
+    }
+
+    pub fn append_file(
+        self: Arc<Self>,
+        path: &Path,
+        seperator: Option<char>,
+        skip_first_line: bool,
+    ) -> Result<Arc<DataFrame>, IoError> {
+        let mut base = BaseDataFrame::from(self);
+        base.append_file(path, seperator, skip_first_line)?;
+        Ok(Arc::new(DataFrame {
+            inner: InnerDataFrame::Base { df: base },
+        }))
+    }
+}
+
+impl BaseDataFrame {
+    fn from_file(path: &Path, seperator: Option<char>) -> Result<BaseDataFrame, IoError> {
         let seperator = seperator.unwrap_or(',');
         let file = File::open(&path)?;
         let reader = BufReader::new(file);
@@ -18,14 +41,15 @@ impl DataFrame {
         let (_i, raw_header) = line_iter
             .next()
             .ok_or_else(|| IoError::other("File is empty"))?;
-        let header = DataFrame::try_build_header(ChunkIter::from_string(raw_header?, seperator))?;
+        let header =
+            BaseDataFrame::try_build_header(ChunkIter::from_string(raw_header?, seperator))?;
 
-        let data = DataFrame::get_data_from_file(&header, line_iter, seperator)?;
+        let data = BaseDataFrame::get_data_from_file(&header, line_iter, seperator)?;
 
-        Ok(DataFrame { header, data })
+        Ok(BaseDataFrame { header, data })
     }
 
-    pub fn append_file(
+    fn append_file(
         &mut self,
         path: &Path,
         seperator: Option<char>,
@@ -39,7 +63,7 @@ impl DataFrame {
             .lines()
             .enumerate()
             .skip(if skip_first_line { 1 } else { 0 });
-        let mut data = DataFrame::get_data_from_file(&self.header, line_iter, seperator)?;
+        let mut data = BaseDataFrame::get_data_from_file(&self.header, line_iter, seperator)?;
         self.append_lines(data.drain(..));
         Ok(())
     }

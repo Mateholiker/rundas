@@ -1,27 +1,20 @@
 pub trait DataFrameColumnIndex {
     #[doc(hidden)]
-    fn get_usize(&self, header: &[String]) -> usize;
+    fn get_usize<'a>(&self, header: impl Iterator<Item = &'a str>) -> usize;
 }
 
 impl DataFrameColumnIndex for usize {
-    fn get_usize(&self, _header: &[String]) -> usize {
+    fn get_usize<'a>(&self, _header: impl Iterator<Item = &'a str>) -> usize {
         *self
     }
 }
 
 impl<'s> DataFrameColumnIndex for &'s str {
-    fn get_usize(&self, header: &[String]) -> usize {
-        if let Some((index, _)) = header
-            .iter()
-            .enumerate()
-            .find(|(_i, string)| self == *string)
-        {
+    fn get_usize<'a>(&self, header: impl Iterator<Item = &'a str>) -> usize {
+        if let Some((index, _)) = header.enumerate().find(|(_i, string)| self == string) {
             index
         } else {
-            panic!(
-                "index out of Bound header is {:?} but index was '{}'",
-                header, self
-            )
+            panic!("index out of Bound: Header does not contain '{self}'")
         }
     }
 }
