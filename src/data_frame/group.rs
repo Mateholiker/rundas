@@ -2,17 +2,16 @@ use std::{
     collections::HashMap,
     hash::Hash,
     ops::{Deref, DerefMut},
-    sync::Arc,
 };
 
 use super::DataFrame;
 
 pub struct Groups<G: Eq + Hash> {
-    groups: Vec<(G, Arc<DataFrame>)>,
+    groups: Vec<(G, DataFrame)>,
 }
 
 impl<G: Eq + Hash> Groups<G> {
-    pub(super) fn new(groups: Vec<(G, Arc<DataFrame>)>) -> Groups<G> {
+    pub(super) fn new(groups: Vec<(G, DataFrame)>) -> Groups<G> {
         Groups { groups }
     }
 
@@ -31,14 +30,14 @@ impl<G: Eq + Hash> Groups<G> {
 
     pub fn filter<F>(&mut self, mut filter: F)
     where
-        F: FnMut(&(G, Arc<DataFrame>)) -> bool,
+        F: FnMut(&(G, DataFrame)) -> bool,
     {
         self.groups.drain_filter(|group| !filter(group));
     }
 }
 
 impl<G: Eq + Hash> Deref for Groups<G> {
-    type Target = Vec<(G, Arc<DataFrame>)>;
+    type Target = Vec<(G, DataFrame)>;
 
     fn deref(&self) -> &Self::Target {
         &self.groups

@@ -1,7 +1,6 @@
 use std::fmt::Write;
 
 use super::{BaseDataFrame, Data, DataFrame, InnerDataFrame};
-use std::sync::Arc;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error as IoError},
@@ -9,24 +8,20 @@ use std::{
 };
 
 impl DataFrame {
-    pub fn from_file(path: &Path, seperator: Option<char>) -> Result<Arc<DataFrame>, IoError> {
+    pub fn from_file(path: &Path, seperator: Option<char>) -> Result<DataFrame, IoError> {
         let base = BaseDataFrame::from_file(path, seperator)?;
-        Ok(Arc::new(DataFrame {
-            inner: InnerDataFrame::Base { df: base },
-        }))
+        Ok(InnerDataFrame::Base { df: base }.into())
     }
 
     pub fn append_file(
-        self: Arc<Self>,
+        self,
         path: &Path,
         seperator: Option<char>,
         skip_first_line: bool,
-    ) -> Result<Arc<DataFrame>, IoError> {
+    ) -> Result<DataFrame, IoError> {
         let mut base = BaseDataFrame::from(self);
         base.append_file(path, seperator, skip_first_line)?;
-        Ok(Arc::new(DataFrame {
-            inner: InnerDataFrame::Base { df: base },
-        }))
+        Ok(InnerDataFrame::Base { df: base }.into())
     }
 }
 

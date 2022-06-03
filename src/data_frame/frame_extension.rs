@@ -1,30 +1,22 @@
-use std::sync::Arc;
-
 use super::{BaseDataFrame, Data, DataFrame, InnerDataFrame};
 
 impl DataFrame {
-    pub fn append_line(self: Arc<Self>, line: Vec<Data>) -> Arc<DataFrame> {
+    pub fn append_line(self, line: Vec<Data>) -> DataFrame {
         let mut base = BaseDataFrame::from(self);
         base.append_line(line);
-        Arc::new(DataFrame {
-            inner: InnerDataFrame::Base { df: base },
-        })
+        InnerDataFrame::Base { df: base }.into()
     }
 
-    pub fn append_lines(self: Arc<Self>, lines: impl Iterator<Item = Vec<Data>>) -> Arc<DataFrame> {
+    pub fn append_lines(self, lines: impl Iterator<Item = Vec<Data>>) -> DataFrame {
         let mut base = BaseDataFrame::from(self);
         base.append_lines(lines);
-        Arc::new(DataFrame {
-            inner: InnerDataFrame::Base { df: base },
-        })
+        InnerDataFrame::Base { df: base }.into()
     }
 
-    pub fn append_data_frame(self: Arc<Self>, other: Arc<DataFrame>) -> Arc<DataFrame> {
+    pub fn append_data_frame(self, other: DataFrame) -> DataFrame {
         let mut base = BaseDataFrame::from(self);
         base.append_data_frame(other);
-        Arc::new(DataFrame {
-            inner: InnerDataFrame::Base { df: base },
-        })
+        InnerDataFrame::Base { df: base }.into()
     }
 }
 
@@ -38,7 +30,7 @@ impl BaseDataFrame {
         lines.for_each(|line| self.append_line(line));
     }
 
-    pub fn append_data_frame(&mut self, other: Arc<DataFrame>) {
+    pub fn append_data_frame(&mut self, other: DataFrame) {
         assert!(self.has_same_header(&other));
         self.append_lines(BaseDataFrame::from(other).data.drain(..));
     }

@@ -9,7 +9,5 @@
 #![feature(box_into_inner)]
 
 mod data_frame;
-use std::sync::Arc;
 
-pub use data_frame::{Data, DataFrame as BlankDataFrame, Groups, SimpleDateTime};
-pub type DataFrame = Arc<BlankDataFrame>;
+pub use data_frame::{Data, DataFrame, Groups, SimpleDateTime};

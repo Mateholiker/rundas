@@ -1,5 +1,6 @@
 use std::iter::FusedIterator;
 
+use std::ops::Deref;
 use std::sync::Arc;
 use std::{collections::HashMap, hash::Hash};
 
@@ -23,11 +24,27 @@ pub struct BaseDataFrame {
 }
 
 pub struct DataFrame {
-    inner: InnerDataFrame,
+    inner: Arc<InnerDataFrame>,
+}
+
+impl Clone for DataFrame {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 impl From<InnerDataFrame> for DataFrame {
     fn from(inner: InnerDataFrame) -> Self {
+        DataFrame {
+            inner: Arc::new(inner),
+        }
+    }
+}
+
+impl From<Arc<InnerDataFrame>> for DataFrame {
+    fn from(inner: Arc<InnerDataFrame>) -> Self {
         DataFrame { inner }
     }
 }
@@ -37,30 +54,26 @@ enum InnerDataFrame {
         df: BaseDataFrame,
     },
     ColumnReorder {
-        df: Arc<DataFrame>,
+        df: DataFrame,
         index_map: Vec<usize>,
     },
     LineReorder {
-        df: Arc<DataFrame>,
+        df: DataFrame,
         index_map: Vec<usize>,
     },
 }
 
-impl From<Arc<DataFrame>> for BaseDataFrame {
-    fn from(df: Arc<DataFrame>) -> Self {
-        let arc_df = match Arc::try_unwrap(df) {
-            Ok(DataFrame {
-                inner: InnerDataFrame::Base { df },
-            }) => {
-                println!("cheap");
+impl From<DataFrame> for BaseDataFrame {
+    fn from(df: DataFrame) -> Self {
+        let arc_df: DataFrame = match Arc::try_unwrap(df.inner) {
+            Ok(InnerDataFrame::Base { df }) => {
                 return df;
             }
 
-            Err(df) => df,
+            Err(df) => df.into(),
 
-            Ok(df) => Arc::new(df),
+            Ok(df) => df.into(),
         };
-        println!("expensive");
 
         let header = arc_df.header().map(|string| string.to_owned()).collect();
         let data = arc_df
@@ -73,61 +86,55 @@ impl From<Arc<DataFrame>> for BaseDataFrame {
 }
 
 impl DataFrame {
-    pub fn new(mut header: Vec<impl Into<String>>) -> Arc<DataFrame> {
+    pub fn new(mut header: Vec<impl Into<String>>) -> DataFrame {
         let df = BaseDataFrame {
             header: header.drain(..).map(|s| s.into()).collect(),
             data: Vec::new(),
         };
-        Arc::new(InnerDataFrame::Base { df }.into())
+        InnerDataFrame::Base { df }.into()
     }
 
-    pub fn head(self: Arc<Self>, lines: usize) -> Arc<DataFrame> {
+    pub fn head(self, lines: usize) -> DataFrame {
         if lines < self.len() {
             let index_map = (0..lines).collect();
-            Arc::new(
-                InnerDataFrame::LineReorder {
-                    df: self,
-                    index_map,
-                }
-                .into(),
-            )
+            InnerDataFrame::LineReorder {
+                df: self,
+                index_map,
+            }
+            .into()
         } else {
             self
         }
     }
 
-    pub fn tail(self: Arc<Self>, lines: usize) -> Arc<DataFrame> {
+    pub fn tail(self, lines: usize) -> DataFrame {
         if lines < self.len() {
             let index_map = (self.len() - lines..self.len()).collect();
-            Arc::new(
-                InnerDataFrame::LineReorder {
-                    df: self,
-                    index_map,
-                }
-                .into(),
-            )
+            InnerDataFrame::LineReorder {
+                df: self,
+                index_map,
+            }
+            .into()
         } else {
             self
         }
     }
 
-    pub fn range(self: Arc<Self>, start: usize, end: usize) -> Arc<DataFrame> {
+    pub fn range(self, start: usize, end: usize) -> DataFrame {
         assert!(start <= end);
         assert!(end <= self.len());
 
         let index_map = (start..end).collect();
 
-        Arc::new(
-            InnerDataFrame::LineReorder {
-                df: self,
-                index_map,
-            }
-            .into(),
-        )
+        InnerDataFrame::LineReorder {
+            df: self,
+            index_map,
+        }
+        .into()
     }
 
     pub fn len(&self) -> usize {
-        match &self.inner {
+        match self.inner.deref() {
             InnerDataFrame::Base { df } => df.data.len(),
             InnerDataFrame::LineReorder { index_map, .. } => index_map.len(),
             InnerDataFrame::ColumnReorder { df, .. } => df.len(),
@@ -135,7 +142,7 @@ impl DataFrame {
     }
 
     pub fn num_columns(&self) -> usize {
-        match &self.inner {
+        match self.inner.deref() {
             InnerDataFrame::Base { df } => df.header.len(),
             InnerDataFrame::LineReorder { df, .. } => df.num_columns(),
             InnerDataFrame::ColumnReorder { index_map, .. } => index_map.len(),
@@ -146,7 +153,7 @@ impl DataFrame {
         self.len() == 0
     }
 
-    pub fn sort<F, K>(self: Arc<Self>, mut key_gen: F) -> Arc<DataFrame>
+    pub fn sort<F, K>(self, mut key_gen: F) -> DataFrame
     where
         F: FnMut(Line) -> K,
         K: Ord,
@@ -159,43 +166,37 @@ impl DataFrame {
             key_gen(line)
         });
 
-        Arc::new(
-            InnerDataFrame::LineReorder {
-                df: self,
-                index_map,
-            }
-            .into(),
-        )
+        InnerDataFrame::LineReorder {
+            df: self,
+            index_map,
+        }
+        .into()
     }
 
-    pub fn drop_column<I>(self: Arc<Self>, index: I) -> Arc<DataFrame>
+    pub fn drop_column<I>(self, index: I) -> DataFrame
     where
         I: DataFrameColumnIndex,
     {
         let index_to_remove = index.get_usize(self.header());
-        Arc::new(
-            InnerDataFrame::ColumnReorder {
-                index_map: (0..self.num_columns())
-                    .filter(|index| *index != index_to_remove)
-                    .collect(),
-                df: self,
-            }
-            .into(),
-        )
+        InnerDataFrame::ColumnReorder {
+            index_map: (0..self.num_columns())
+                .filter(|index| *index != index_to_remove)
+                .collect(),
+            df: self,
+        }
+        .into()
     }
 
-    pub fn drop_all_column_except<I>(self: Arc<Self>, indizes: &[I]) -> Arc<DataFrame>
+    pub fn drop_all_column_except<I>(self, indizes: &[I]) -> DataFrame
     where
         I: DataFrameColumnIndex,
     {
         let to_keep = indizes.iter().map(|i| i.get_usize(self.header())).collect();
-        Arc::new(
-            InnerDataFrame::ColumnReorder {
-                df: self,
-                index_map: to_keep,
-            }
-            .into(),
-        )
+        InnerDataFrame::ColumnReorder {
+            df: self,
+            index_map: to_keep,
+        }
+        .into()
     }
 
     pub fn fold_column<I, T, F>(&self, index: I, init: T, f: F) -> T
@@ -207,7 +208,7 @@ impl DataFrame {
         self.iter().map(|line| line[index].clone()).fold(init, f)
     }
 
-    pub fn filter<F>(self: Arc<Self>, mut filter: F) -> Arc<DataFrame>
+    pub fn filter<F>(self, mut filter: F) -> DataFrame
     where
         F: FnMut(Line) -> bool,
     {
@@ -217,16 +218,14 @@ impl DataFrame {
             .filter_map(|(i, line)| if filter(line) { Some(i) } else { None })
             .collect();
 
-        Arc::new(
-            InnerDataFrame::LineReorder {
-                df: self,
-                index_map,
-            }
-            .into(),
-        )
+        InnerDataFrame::LineReorder {
+            df: self,
+            index_map,
+        }
+        .into()
     }
 
-    pub fn group_by<F, G>(self: Arc<Self>, mut grouper: F) -> Groups<G>
+    pub fn group_by<F, G>(self, mut grouper: F) -> Groups<G>
     where
         F: FnMut(Line) -> G,
         G: Hash + Eq,
@@ -244,13 +243,11 @@ impl DataFrame {
         for (key, index_map) in map {
             groups.push((
                 key,
-                Arc::new(
-                    InnerDataFrame::LineReorder {
-                        df: self.clone(),
-                        index_map,
-                    }
-                    .into(),
-                ),
+                InnerDataFrame::LineReorder {
+                    df: self.clone(),
+                    index_map,
+                }
+                .into(),
             ));
         }
         Groups::new(groups)
@@ -265,7 +262,7 @@ impl DataFrame {
     }
 
     pub fn get(&self, index: usize) -> Option<Line> {
-        match &self.inner {
+        match self.inner.deref() {
             InnerDataFrame::Base { df } => {
                 df.data.get(index).map(|line| Line::new(&df.header, line))
             }
@@ -281,7 +278,7 @@ impl DataFrame {
     }
 
     fn get_on_header(&self, index: usize) -> Option<&str> {
-        match &self.inner {
+        match self.inner.deref() {
             InnerDataFrame::Base { df, .. } => df.header.get(index).map(|string| &string[..]),
             InnerDataFrame::LineReorder { df, .. } => df.get_on_header(index),
             InnerDataFrame::ColumnReorder { df, index_map } => index_map
