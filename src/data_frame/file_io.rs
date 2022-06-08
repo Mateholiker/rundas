@@ -131,7 +131,7 @@ impl<'s> Iterator for ChunkIter<'s> {
                     self.seperator,
                 );
 
-                let item = Data::Vector(Box::new(inner_iter.collect()));
+                let item = Data::Vector(inner_iter.collect());
                 let trimed_end_index = self.string.ceil_char_boundary(end_index + 1);
                 self.string = &self.string[trimed_end_index..];
                 Some(item)

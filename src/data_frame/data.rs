@@ -22,17 +22,17 @@ impl InnerData {
     pub(super) fn as_data<'df>(&self, df: &'df DataFrame) -> Data<'df> {
         match self {
             InnerData::String(range) => {
-                Data::String(Box::new(df.get_from_string_storage(range.deref().clone())))
+                Data::String(df.get_from_string_storage(range.deref().clone()))
             }
             InnerData::Integer(integer) => Data::Integer(*integer),
             InnerData::Float(float) => Data::Float(*float),
             InnerData::Boolean(boolean) => Data::Boolean(*boolean),
             InnerData::Date(date) => Data::Date(*date),
-            InnerData::Vector(vec) => Data::Vector(Box::new(
+            InnerData::Vector(vec) => Data::Vector(
                 vec.iter()
                     .map(|inner_data| inner_data.as_data(df))
                     .collect(),
-            )),
+            ),
             InnerData::Vec2D(tuple) => Data::Vec2D(*tuple),
         }
     }
@@ -40,12 +40,12 @@ impl InnerData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Data<'df> {
-    String(Box<&'df str>),
+    String(&'df str),
     Integer(i32),
     Float(f32),
     Boolean(bool),
     Date(SimpleDateTime),
-    Vector(Box<Vec<Data<'df>>>),
+    Vector(Vec<Data<'df>>),
     Vec2D((f32, f32)),
 }
 
@@ -106,7 +106,7 @@ impl<'df> Data<'df> {
         match self {
             Data::String(string) => {
                 let start = string_storage.len();
-                string_storage.push_str(&string);
+                string_storage.push_str(string);
                 let end = string_storage.len();
                 InnerData::String(Box::new(start..end))
             }
@@ -176,7 +176,7 @@ impl<'df> From<&'df str> for Data<'df> {
                 return Vec2D((x, y));
             }
         }
-        String(Box::new(string))
+        String(string)
     }
 }
 
