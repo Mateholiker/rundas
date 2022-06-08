@@ -21,10 +21,16 @@ impl DataFrame {
         base.append_data_frame(other);
         InnerDataFrame::Base { df: base }.into()
     }
+
+    pub fn append_column<'odf>(self, header: &str, column: &[Data<'odf>]) -> DataFrame {
+        let mut base = BaseDataFrame::from(self);
+        base.append_column(header, column);
+        InnerDataFrame::Base { df: base }.into()
+    }
 }
 
 impl BaseDataFrame {
-    pub fn append_line<'odf>(&mut self, line: impl Iterator<Item = Data<'odf>>) {
+    pub(super) fn append_line<'odf>(&mut self, line: impl Iterator<Item = Data<'odf>>) {
         let line: Vec<_> = line
             .map(|data| data.into_inner_data(&mut self.string_storage))
             .collect();
@@ -32,16 +38,21 @@ impl BaseDataFrame {
         self.data.push(line);
     }
 
-    pub fn append_lines<'df>(
+    fn append_lines<'df>(
         &mut self,
         lines: impl Iterator<Item = impl Iterator<Item = Data<'df>>>,
     ) {
         lines.for_each(|line| self.append_line(line));
     }
 
-    pub fn append_data_frame(&mut self, other: &DataFrame) {
+    fn append_data_frame(&mut self, other: &DataFrame) {
         assert!(self.has_same_header(other));
         self.append_lines(other.iter().map(|line| line.iter()));
+    }
+
+    fn append_column<'odf>(&mut self, header: &str, column: &[Data<'odf>]) {
+        assert_eq!(self.data.len(), column.len());
+        todo!()
     }
 
     fn has_same_header(&self, other: &DataFrame) -> bool {
