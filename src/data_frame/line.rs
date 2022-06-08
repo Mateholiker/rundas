@@ -52,7 +52,7 @@ impl<'df> Line<'df> {
 
     pub fn get<I>(&self, index: &I) -> Data<'df>
     where
-        I: DataFrameColumnIndex,
+        I: DataFrameColumnIndex + ?Sized,
     {
         let index = index.get_usize(self.header());
         self.line[index].as_data(self.df)

@@ -204,9 +204,9 @@ impl DataFrame {
         .into()
     }
 
-    pub fn drop_column<I>(self, index: I) -> DataFrame
+    pub fn drop_column<I>(self, index: &I) -> DataFrame
     where
-        I: DataFrameColumnIndex,
+        I: DataFrameColumnIndex + ?Sized,
     {
         let index_to_remove = index.get_usize(self.header());
         InnerDataFrame::ColumnReorder {
@@ -218,9 +218,9 @@ impl DataFrame {
         .into()
     }
 
-    pub fn drop_all_column_except<I>(self, indizes: &[I]) -> DataFrame
+    pub fn drop_all_column_except<I>(self, indizes: &[&I]) -> DataFrame
     where
-        I: DataFrameColumnIndex,
+        I: DataFrameColumnIndex + ?Sized,
     {
         let to_keep = indizes.iter().map(|i| i.get_usize(self.header())).collect();
         InnerDataFrame::ColumnReorder {
@@ -232,7 +232,7 @@ impl DataFrame {
 
     pub fn fold_column<I, T, F>(&self, index: &I, init: T, f: F) -> T
     where
-        I: DataFrameColumnIndex,
+        I: DataFrameColumnIndex + ?Sized,
         F: FnMut(T, Data) -> T,
     {
         self.iter().map(|line| line.get(index)).fold(init, f)
