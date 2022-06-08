@@ -1,10 +1,11 @@
 use std::iter::FusedIterator;
 
-use std::ops::Deref;
+use std::ops::{Deref, Range};
 use std::sync::Arc;
 use std::{collections::HashMap, hash::Hash};
 
 mod data;
+use data::InnerData;
 pub use data::{Data, SimpleDateTime};
 mod line;
 pub use line::Line;
@@ -19,8 +20,10 @@ mod file_io;
 mod frame_extension;
 
 pub struct BaseDataFrame {
-    header: Vec<String>,
-    data: Vec<Vec<Data>>,
+    string_storage: String,
+    identity_index_map: Vec<usize>,
+    header: Vec<Range<usize>>,
+    data: Vec<Vec<InnerData>>,
 }
 
 pub struct DataFrame {
@@ -75,20 +78,48 @@ impl From<DataFrame> for BaseDataFrame {
             Ok(df) => df.into(),
         };
 
-        let header = arc_df.header().map(|string| string.to_owned()).collect();
+        let mut header = Vec::new();
+        let mut string_storage = String::new();
+        for string in arc_df.header() {
+            let start = string_storage.len();
+            string_storage.push_str(string);
+            let end = string_storage.len();
+            header.push(start..end);
+        }
+
         let data = arc_df
             .iter()
-            .map(|line| line.iter().cloned().collect::<Vec<_>>())
+            .map(|line| {
+                line.iter()
+                    .map(|data| data.into_inner_data(&mut string_storage))
+                    .collect::<Vec<InnerData>>()
+            })
             .collect::<Vec<_>>();
 
-        BaseDataFrame { header, data }
+        BaseDataFrame {
+            string_storage,
+            identity_index_map: (0..header.len()).collect(),
+            header,
+            data,
+        }
     }
 }
 
 impl DataFrame {
-    pub fn new(mut header: Vec<impl Into<String>>) -> DataFrame {
+    pub fn new(header: Vec<impl Into<String>>) -> DataFrame {
+        let mut final_header = Vec::new();
+        let mut string_storage = String::new();
+        for string in header {
+            let start = string_storage.len();
+            string_storage.push_str(&string.into());
+            let end = string_storage.len();
+            final_header.push(start..end);
+        }
+
         let df = BaseDataFrame {
-            header: header.drain(..).map(|s| s.into()).collect(),
+            string_storage,
+            identity_index_map: (0..final_header.len()).collect(),
+            header: final_header,
             data: Vec::new(),
         };
         InnerDataFrame::Base { df }.into()
@@ -199,13 +230,12 @@ impl DataFrame {
         .into()
     }
 
-    pub fn fold_column<I, T, F>(&self, index: I, init: T, f: F) -> T
+    pub fn fold_column<I, T, F>(&self, index: &I, init: T, f: F) -> T
     where
         I: DataFrameColumnIndex,
         F: FnMut(T, Data) -> T,
     {
-        let index = index.get_usize(self.header());
-        self.iter().map(|line| line[index].clone()).fold(init, f)
+        self.iter().map(|line| line.get(index)).fold(init, f)
     }
 
     pub fn filter<F>(self, mut filter: F) -> DataFrame
@@ -263,27 +293,41 @@ impl DataFrame {
 
     pub fn get(&self, index: usize) -> Option<Line> {
         match self.inner.deref() {
-            InnerDataFrame::Base { df } => {
-                df.data.get(index).map(|line| Line::new(&df.header, line))
-            }
+            InnerDataFrame::Base { df } => df
+                .data
+                .get(index)
+                .map(|line| Line::new(self, line, &df.identity_index_map)),
             InnerDataFrame::LineReorder { df, index_map } => {
                 index_map.get(index).and_then(|index| df.get(*index))
             }
 
             InnerDataFrame::ColumnReorder { df, index_map } => {
                 let line = df.get(index);
-                line.map(|line| line.with_index_map(index_map.clone()))
+                line.map(|line| line.with_index_map(index_map))
             }
         }
     }
 
     fn get_on_header(&self, index: usize) -> Option<&str> {
         match self.inner.deref() {
-            InnerDataFrame::Base { df, .. } => df.header.get(index).map(|string| &string[..]),
+            InnerDataFrame::Base { df, .. } => df.header.get(index).map(|range| {
+                df.string_storage
+                    .get(range.clone())
+                    .expect("Header index inconsitant with string_storage UTF8 boundary")
+            }),
             InnerDataFrame::LineReorder { df, .. } => df.get_on_header(index),
             InnerDataFrame::ColumnReorder { df, index_map } => index_map
                 .get(index)
                 .and_then(|index| df.get_on_header(*index)),
+        }
+    }
+
+    fn get_from_string_storage(&self, range: Range<usize>) -> &str {
+        match self.inner.deref() {
+            InnerDataFrame::Base { df, .. } => &df.string_storage[range],
+            InnerDataFrame::LineReorder { df, .. } | InnerDataFrame::ColumnReorder { df, .. } => {
+                df.get_from_string_storage(range)
+            }
         }
     }
 }

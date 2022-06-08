@@ -2,20 +2,54 @@ use chrono::{DateTime, Datelike, Local, Timelike};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::ops::{Deref, Range};
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Data {
-    String(Box<String>),
+use crate::DataFrame;
+
+pub(super) enum InnerData {
+    String(Box<Range<usize>>),
     Integer(i32),
     Float(f32),
     Boolean(bool),
     Date(SimpleDateTime),
-    Vector(Box<Vec<Data>>),
+    #[allow(clippy::box_collection)]
+    Vector(Box<Vec<InnerData>>),
     Vec2D((f32, f32)),
 }
 
-impl Data {
+impl InnerData {
+    pub(super) fn as_data<'df>(&self, df: &'df DataFrame) -> Data<'df> {
+        match self {
+            InnerData::String(range) => {
+                Data::String(Box::new(df.get_from_string_storage(range.deref().clone())))
+            }
+            InnerData::Integer(integer) => Data::Integer(*integer),
+            InnerData::Float(float) => Data::Float(*float),
+            InnerData::Boolean(boolean) => Data::Boolean(*boolean),
+            InnerData::Date(date) => Data::Date(*date),
+            InnerData::Vector(vec) => Data::Vector(Box::new(
+                vec.iter()
+                    .map(|inner_data| inner_data.as_data(df))
+                    .collect(),
+            )),
+            InnerData::Vec2D(tuple) => Data::Vec2D(*tuple),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Data<'df> {
+    String(Box<&'df str>),
+    Integer(i32),
+    Float(f32),
+    Boolean(bool),
+    Date(SimpleDateTime),
+    Vector(Box<Vec<Data<'df>>>),
+    Vec2D((f32, f32)),
+}
+
+impl<'df> Data<'df> {
     pub fn as_string(&self) -> String {
         format!("{}", self)
     }
@@ -52,7 +86,7 @@ impl Data {
         }
     }
 
-    pub fn as_vec(&self) -> &Vec<Data> {
+    pub fn as_vec(&self) -> &Vec<Data<'df>> {
         if let Data::Vector(ref vec) = self {
             vec
         } else {
@@ -67,9 +101,31 @@ impl Data {
             panic!("cannot convert {} to Vec2", self)
         }
     }
+
+    pub(super) fn into_inner_data(self, string_storage: &mut String) -> InnerData {
+        match self {
+            Data::String(string) => {
+                let start = string_storage.len();
+                string_storage.push_str(&string);
+                let end = string_storage.len();
+                InnerData::String(Box::new(start..end))
+            }
+            Data::Integer(integer) => InnerData::Integer(integer),
+            Data::Float(float) => InnerData::Float(float),
+            Data::Boolean(boolean) => InnerData::Boolean(boolean),
+            Data::Date(simple_date_time) => InnerData::Date(simple_date_time),
+            Data::Vector(mut vector) => InnerData::Vector(Box::new(
+                vector
+                    .drain(..)
+                    .map(|data| data.into_inner_data(string_storage))
+                    .collect(),
+            )),
+            Data::Vec2D(tuble) => InnerData::Vec2D(tuble),
+        }
+    }
 }
 
-impl Display for Data {
+impl<'df> Display for Data<'df> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         use Data::{Boolean, Date, Float, Integer, String, Vec2D, Vector};
         match self {
@@ -99,19 +155,19 @@ impl Display for Data {
     }
 }
 
-impl From<String> for Data {
-    fn from(string: String) -> Self {
+impl<'df> From<&'df str> for Data<'df> {
+    fn from(string: &'df str) -> Self {
         use Data::{Boolean, Date, Float, Integer, String, Vec2D};
-        if let Ok(boolean) = bool::from_str(&string) {
+        if let Ok(boolean) = bool::from_str(string) {
             return Boolean(boolean);
         }
-        if let Ok(integer) = i32::from_str(&string) {
+        if let Ok(integer) = i32::from_str(string) {
             return Integer(integer);
         }
-        if let Ok(float) = f32::from_str(&string) {
+        if let Ok(float) = f32::from_str(string) {
             return Float(float);
         }
-        if let Ok(date) = DateTime::from_str(&string) {
+        if let Ok(date) = DateTime::from_str(string) {
             return Date(date.into());
         }
         if string.contains(' ') && string.split(' ').count() == 2 {
@@ -123,20 +179,21 @@ impl From<String> for Data {
         String(Box::new(string))
     }
 }
+
 //todo build makro for this
-impl From<&i32> for Data {
+impl<'df> From<&i32> for Data<'df> {
     fn from(int: &i32) -> Self {
         Data::Integer(*int)
     }
 }
 
-impl From<i32> for Data {
+impl<'df> From<i32> for Data<'df> {
     fn from(int: i32) -> Self {
         Data::Integer(int)
     }
 }
 
-impl From<f32> for Data {
+impl<'df> From<f32> for Data<'df> {
     fn from(float: f32) -> Self {
         Data::Float(float)
     }

@@ -1,6 +1,8 @@
-use std::fmt::Write;
+use std::ops::{Deref, Range};
 
-use super::{BaseDataFrame, Data, DataFrame, InnerDataFrame};
+use crate::Data;
+
+use super::{BaseDataFrame, DataFrame, InnerDataFrame};
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error as IoError},
@@ -31,16 +33,38 @@ impl BaseDataFrame {
         let file = File::open(&path)?;
         let reader = BufReader::new(file);
 
-        let mut line_iter = reader.lines().enumerate();
-        let (_i, raw_header) = line_iter
+        let mut line_iter = reader.lines();
+        let raw_header = line_iter
             .next()
             .ok_or_else(|| IoError::other("File is empty"))?;
-        let header =
-            BaseDataFrame::try_build_header(ChunkIter::from_string(raw_header?, seperator))?;
+        let (string_storage, header) =
+            BaseDataFrame::try_build_header(ChunkIter::from_str(&raw_header?, seperator))?;
 
-        let data = BaseDataFrame::get_data_from_file(&header, line_iter, seperator)?;
+        let mut df = BaseDataFrame {
+            string_storage,
+            identity_index_map: (0..header.len()).collect(),
+            header,
+            data: Vec::new(),
+        };
 
-        Ok(BaseDataFrame { header, data })
+        df.append_file(path, Some(seperator), true)?;
+        Ok(df)
+    }
+
+    fn try_build_header(raw_header: ChunkIter) -> Result<(String, Vec<Range<usize>>), IoError> {
+        let mut string_storage = String::new();
+        let mut header = Vec::new();
+        for data in raw_header {
+            if let Data::String(string) = data {
+                let start = string_storage.len();
+                string_storage.push_str(string.deref());
+                let end = string_storage.len();
+                header.push(start..end);
+            } else {
+                return Err(IoError::other("File has no valid Header"));
+            }
+        }
+        Ok((string_storage, header))
     }
 
     fn append_file(
@@ -53,86 +77,15 @@ impl BaseDataFrame {
         let file = File::open(&path)?;
         let reader = BufReader::new(file);
 
-        let line_iter = reader
-            .lines()
-            .enumerate()
-            .skip(if skip_first_line { 1 } else { 0 });
-        let mut data = BaseDataFrame::get_data_from_file(&self.header, line_iter, seperator)?;
-        self.append_lines(data.drain(..));
+        let line_iter = reader.lines().skip(if skip_first_line { 1 } else { 0 });
+
+        for line_string_result in line_iter {
+            let line_string = line_string_result?;
+            let chunk_iter = ChunkIter::from_str(&line_string, seperator);
+            self.append_line(chunk_iter);
+        }
+
         Ok(())
-    }
-
-    fn get_data_from_file(
-        header: &[String],
-        line_iter: impl Iterator<Item = (usize, Result<String, IoError>)>,
-        seperator: char,
-    ) -> Result<Vec<Vec<Data>>, IoError> {
-        let mut data = Vec::new();
-        for (i, line_res) in line_iter {
-            let line = line_res?;
-            let chunk_iter = ChunkIter::from_string(line, seperator);
-            let line_data: Vec<Data> = chunk_iter.collect();
-
-            if line_data.len() != header.len() {
-                return Err(Self::create_error(i, &line_data, header));
-            }
-            data.push(line_data);
-        }
-        Ok(data)
-    }
-
-    fn try_build_header(raw_header: ChunkIter) -> Result<Vec<String>, IoError> {
-        let mut header = Vec::new();
-        for data in raw_header {
-            if let Data::String(string) = data {
-                header.push(Box::<String>::into_inner(string));
-            } else {
-                return Err(IoError::other("File has no valid Header"));
-            }
-        }
-        Ok(header)
-    }
-
-    fn create_error(line_index: usize, line_data: &[Data], header: &[String]) -> IoError {
-        let id = if line_data.len() > header.len() {
-            "more"
-        } else {
-            "less"
-        };
-        let mut header_iter = header.iter().peekable();
-        let mut line_iter = line_data.iter().peekable();
-        let mut pairs: Vec<(Option<String>, Option<Data>)> = Vec::new();
-        while let (Some(header_elem), Some(line_elem)) = (header_iter.peek(), line_iter.peek()) {
-            pairs.push((Some(header_elem.to_string()), Some((*line_elem).clone())));
-            header_iter.next();
-            line_iter.next();
-        }
-        for elem in header_iter {
-            pairs.push((Some(elem.to_string()), None));
-        }
-        for elem in line_iter {
-            pairs.push((None, Some(elem.clone())));
-        }
-        IoError::other({
-            let mut header_string = format!(
-                "Line {} contrains {} entries than the header; Line.len() = {}, Header.len() = {};\n",
-                line_index + 1,
-                id,
-                line_data.len(),
-                header.len()
-            );
-            for (h, l) in pairs {
-                write!(header_string, "{}:  ", h.unwrap_or_else(|| "None".into()))
-                    .expect("should be fine");
-                if let Some(l) = l {
-                    write!(header_string, "{:?}", l).expect("should be fine")
-                } else {
-                    header_string.push_str("None");
-                }
-                header_string.push('\n');
-            }
-            header_string
-        })
     }
 }
 
@@ -145,53 +98,54 @@ const GROUPING_SYMBOLE: [(char, char); 6] = [
     ('\'', '\''),
 ];
 
-struct ChunkIter {
-    string: String,
+struct ChunkIter<'s> {
+    string: &'s str,
     seperator: char,
 }
 
-impl ChunkIter {
-    fn from_string(string: String, seperator: char) -> ChunkIter {
+impl<'s> ChunkIter<'s> {
+    fn from_str(string: &'s str, seperator: char) -> ChunkIter {
         ChunkIter { string, seperator }
     }
 }
 
-impl Iterator for ChunkIter {
-    type Item = Data;
+impl<'s> Iterator for ChunkIter<'s> {
+    type Item = Data<'s>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let trimed = self.string.trim();
-        let mut chars = trimed.chars().peekable();
-        if let Some(first) = chars.peek() {
+        let trimed = self.string.trim_start();
+        let mut chars = trimed.char_indices();
+
+        if let Some((start_index, first)) = chars.next() {
             if let Some((_start, end)) = GROUPING_SYMBOLE
                 .iter()
-                .find(|(start, _end)| *start == *first)
+                .find(|(start, _end)| *start == first)
             {
-                //pop the first elem since it is equal to start
-                chars.next();
-                let rest: String = chars
-                    .clone()
-                    .skip_while(|elem| *elem != *end)
-                    .skip(1)
-                    .collect();
-                let trimed = rest.trim();
-                assert!(trimed.starts_with(self.seperator) || trimed.is_empty());
-                let chunk: String = chars.take_while(|elem| *elem != *end).collect();
-                let inner_iterator = ChunkIter::from_string(chunk, self.seperator);
-                self.string = rest.trim().chars().skip(1).collect();
+                let (end_index, _end_symbole) = chars
+                    .find(|(_index, elem)| elem == end)
+                    .expect("Line contains a start but no matching end grouping symbole");
 
-                let data_vec = Box::new(inner_iterator.collect());
+                let trimed_start_index = self.string.ceil_char_boundary(start_index + 1);
+                let inner_iter = ChunkIter::from_str(
+                    &self.string[trimed_start_index..end_index],
+                    self.seperator,
+                );
 
-                Some(Data::Vector(data_vec))
+                let item = Data::Vector(Box::new(inner_iter.collect()));
+                let trimed_end_index = self.string.ceil_char_boundary(end_index + 1);
+                self.string = &self.string[trimed_end_index..];
+                Some(item)
+            } else if let Some((end_index, _seperator)) =
+                chars.find(|(_index, elem)| *elem == self.seperator)
+            {
+                let item = Data::from(&self.string[start_index..end_index]);
+                let trimed_end_index = self.string.ceil_char_boundary(end_index + 1);
+                self.string = &self.string[trimed_end_index..];
+                Some(item)
             } else {
-                let rest = chars
-                    .clone()
-                    .skip_while(|elem| *elem != self.seperator)
-                    .skip(1)
-                    .collect();
-                let chunk: String = chars.take_while(|elem| *elem != self.seperator).collect();
-                self.string = rest;
-                Some(chunk.into())
+                let item = Data::from(&self.string[start_index..]);
+                self.string = &self.string[0..0];
+                Some(item)
             }
         } else {
             None
