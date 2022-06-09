@@ -19,6 +19,7 @@ mod file_io;
 mod frame_extension;
 
 pub struct BaseDataFrame {
+    identity_index_map: Vec<usize>,
     header: Vec<String>,
     data: Vec<Vec<Data>>,
 }
@@ -75,19 +76,24 @@ impl From<DataFrame> for BaseDataFrame {
             Ok(df) => df.into(),
         };
 
-        let header = arc_df.header().map(|string| string.to_owned()).collect();
+        let header: Vec<_> = arc_df.header().map(|string| string.to_owned()).collect();
         let data = arc_df
             .iter()
             .map(|line| line.iter().cloned().collect::<Vec<_>>())
             .collect::<Vec<_>>();
 
-        BaseDataFrame { header, data }
+        BaseDataFrame {
+            identity_index_map: (0..header.len()).collect(),
+            header,
+            data,
+        }
     }
 }
 
 impl DataFrame {
     pub fn new(mut header: Vec<impl Into<String>>) -> DataFrame {
         let df = BaseDataFrame {
+            identity_index_map: (0..header.len()).collect(),
             header: header.drain(..).map(|s| s.into()).collect(),
             data: Vec::new(),
         };
@@ -263,16 +269,17 @@ impl DataFrame {
 
     pub fn get(&self, index: usize) -> Option<Line> {
         match self.inner.deref() {
-            InnerDataFrame::Base { df } => {
-                df.data.get(index).map(|line| Line::new(&df.header, line))
-            }
+            InnerDataFrame::Base { df } => df
+                .data
+                .get(index)
+                .map(|line| Line::new(&df.header, line, &df.identity_index_map)),
             InnerDataFrame::LineReorder { df, index_map } => {
                 index_map.get(index).and_then(|index| df.get(*index))
             }
 
             InnerDataFrame::ColumnReorder { df, index_map } => {
                 let line = df.get(index);
-                line.map(|line| line.with_index_map(index_map.clone()))
+                line.map(|line| line.with_index_map(index_map))
             }
         }
     }

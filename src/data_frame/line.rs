@@ -5,7 +5,7 @@ use super::Data;
 pub struct Line<'df> {
     header: &'df Vec<String>,
     line: &'df Vec<Data>,
-    index_map: Vec<usize>,
+    index_map: &'df [usize],
 }
 
 impl<'df> IntoIterator for &Line<'df> {
@@ -19,15 +19,19 @@ impl<'df> IntoIterator for &Line<'df> {
 }
 
 impl<'df> Line<'df> {
-    pub(super) fn new(header: &'df Vec<String>, line: &'df Vec<Data>) -> Line<'df> {
+    pub(super) fn new(
+        header: &'df Vec<String>,
+        line: &'df Vec<Data>,
+        index_map: &'df [usize],
+    ) -> Line<'df> {
         Line {
             header,
             line,
-            index_map: (0..line.len()).collect(),
+            index_map,
         }
     }
 
-    pub(super) fn with_index_map(mut self, index_map: Vec<usize>) -> Line<'df> {
+    pub(super) fn with_index_map(mut self, index_map: &'df [usize]) -> Line<'df> {
         self.index_map = index_map;
         self
     }

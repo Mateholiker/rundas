@@ -39,7 +39,11 @@ impl BaseDataFrame {
 
         let data = BaseDataFrame::get_data_from_file(&header, line_iter, seperator)?;
 
-        Ok(BaseDataFrame { header, data })
+        Ok(BaseDataFrame {
+            identity_index_map: (0..header.len()).collect(),
+            header,
+            data,
+        })
     }
 
     fn append_file(
