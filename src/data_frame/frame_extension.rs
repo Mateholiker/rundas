@@ -18,6 +18,12 @@ impl DataFrame {
         base.append_data_frame(other);
         InnerDataFrame::Base { df: base }.into()
     }
+
+    pub fn append_column(self, header: &str, column: Vec<Data>) -> DataFrame {
+        let mut base = BaseDataFrame::from(self);
+        base.append_column(header, column);
+        InnerDataFrame::Base { df: base }.into()
+    }
 }
 
 impl BaseDataFrame {
@@ -33,6 +39,15 @@ impl BaseDataFrame {
     pub(super) fn append_data_frame(&mut self, other: DataFrame) {
         assert!(self.has_same_header(&other));
         self.append_lines(BaseDataFrame::from(other).data.drain(..));
+    }
+
+    fn append_column(&mut self, header: &str, mut column: Vec<Data>) {
+        assert_eq!(self.data.len(), column.len());
+        self.data
+            .iter_mut()
+            .zip(column.drain(..))
+            .for_each(|(line, new_elem)| line.push(new_elem));
+        self.header.push(header.to_owned());
     }
 
     fn has_same_header(&self, other: &DataFrame) -> bool {
