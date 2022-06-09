@@ -21,16 +21,16 @@ impl DataFrame {
 }
 
 impl BaseDataFrame {
-    pub fn append_line(&mut self, line: Vec<Data>) {
+    pub(super) fn append_line(&mut self, line: Vec<Data>) {
         assert_eq!(self.header.len(), line.len());
         self.data.push(line);
     }
 
-    pub fn append_lines(&mut self, lines: impl Iterator<Item = Vec<Data>>) {
+    pub(super) fn append_lines(&mut self, lines: impl Iterator<Item = Vec<Data>>) {
         lines.for_each(|line| self.append_line(line));
     }
 
-    pub fn append_data_frame(&mut self, other: DataFrame) {
+    pub(super) fn append_data_frame(&mut self, other: DataFrame) {
         assert!(self.has_same_header(&other));
         self.append_lines(BaseDataFrame::from(other).data.drain(..));
     }
