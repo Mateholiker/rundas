@@ -48,6 +48,7 @@ impl BaseDataFrame {
             .zip(column.drain(..))
             .for_each(|(line, new_elem)| line.push(new_elem));
         self.header.push(header.to_owned());
+        self.identity_index_map.push(self.identity_index_map.len());
     }
 
     fn has_same_header(&self, other: &DataFrame) -> bool {
