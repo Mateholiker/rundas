@@ -35,8 +35,7 @@ impl BaseDataFrame {
         let (_i, raw_header) = line_iter
             .next()
             .ok_or_else(|| IoError::other("File is empty"))?;
-        let header =
-            BaseDataFrame::try_build_header(ChunkIter::from_string(raw_header?, seperator))?;
+        let header = BaseDataFrame::try_build_header(ChunkIter::from_str(&raw_header?, seperator))?;
 
         let data = BaseDataFrame::get_data_from_file(&header, line_iter, seperator)?;
 
@@ -70,7 +69,7 @@ impl BaseDataFrame {
         let mut data = Vec::new();
         for (i, line_res) in line_iter {
             let line = line_res?;
-            let chunk_iter = ChunkIter::from_string(line, seperator);
+            let chunk_iter = ChunkIter::from_str(&line, seperator);
             let line_data: Vec<Data> = chunk_iter.collect();
 
             if line_data.len() != header.len() {
@@ -145,53 +144,54 @@ const GROUPING_SYMBOLE: [(char, char); 6] = [
     ('\'', '\''),
 ];
 
-struct ChunkIter {
-    string: String,
+struct ChunkIter<'s> {
+    string: &'s str,
     seperator: char,
 }
 
-impl ChunkIter {
-    fn from_string(string: String, seperator: char) -> ChunkIter {
+impl<'s> ChunkIter<'s> {
+    fn from_str(string: &'s str, seperator: char) -> ChunkIter {
         ChunkIter { string, seperator }
     }
 }
 
-impl Iterator for ChunkIter {
+impl<'s> Iterator for ChunkIter<'s> {
     type Item = Data;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let trimed = self.string.trim();
-        let mut chars = trimed.chars().peekable();
-        if let Some(first) = chars.peek() {
+        let trimed = self.string.trim_start();
+        let mut chars = trimed.char_indices();
+
+        if let Some((start_index, first)) = chars.next() {
             if let Some((_start, end)) = GROUPING_SYMBOLE
                 .iter()
-                .find(|(start, _end)| *start == *first)
+                .find(|(start, _end)| *start == first)
             {
-                //pop the first elem since it is equal to start
-                chars.next();
-                let rest: String = chars
-                    .clone()
-                    .skip_while(|elem| *elem != *end)
-                    .skip(1)
-                    .collect();
-                let trimed = rest.trim();
-                assert!(trimed.starts_with(self.seperator) || trimed.is_empty());
-                let chunk: String = chars.take_while(|elem| *elem != *end).collect();
-                let inner_iterator = ChunkIter::from_string(chunk, self.seperator);
-                self.string = rest.trim().chars().skip(1).collect();
+                let (end_index, _end_symbole) = chars
+                    .find(|(_index, elem)| elem == end)
+                    .expect("Line contains a start but no matching end grouping symbole");
 
-                let data_vec = Box::new(inner_iterator.collect());
+                let trimed_start_index = self.string.ceil_char_boundary(start_index + 1);
+                let inner_iter = ChunkIter::from_str(
+                    &self.string[trimed_start_index..end_index],
+                    self.seperator,
+                );
 
-                Some(Data::Vector(data_vec))
+                let item = Data::Vector(Box::new(inner_iter.collect()));
+                let trimed_end_index = self.string.ceil_char_boundary(end_index + 1);
+                self.string = &self.string[trimed_end_index..];
+                Some(item)
+            } else if let Some((end_index, _seperator)) =
+                chars.find(|(_index, elem)| *elem == self.seperator)
+            {
+                let item = Data::from(self.string[start_index..end_index].to_owned());
+                let trimed_end_index = self.string.ceil_char_boundary(end_index + 1);
+                self.string = &self.string[trimed_end_index..];
+                Some(item)
             } else {
-                let rest = chars
-                    .clone()
-                    .skip_while(|elem| *elem != self.seperator)
-                    .skip(1)
-                    .collect();
-                let chunk: String = chars.take_while(|elem| *elem != self.seperator).collect();
-                self.string = rest;
-                Some(chunk.into())
+                let item = Data::from(self.string[start_index..].to_owned());
+                self.string = &self.string[0..0];
+                Some(item)
             }
         } else {
             None
