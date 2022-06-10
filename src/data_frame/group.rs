@@ -28,11 +28,12 @@ impl<G: Eq + Hash> Groups<G> {
         map
     }
 
-    pub fn filter<F>(&mut self, mut filter: F)
+    pub fn filter<F>(mut self, mut filter: F) -> Groups<G>
     where
         F: FnMut(&(G, DataFrame)) -> bool,
     {
         self.groups.drain_filter(|group| !filter(group));
+        self
     }
 }
 
