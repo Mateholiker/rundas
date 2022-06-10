@@ -91,6 +91,15 @@ impl From<DataFrame> for BaseDataFrame {
 }
 
 impl DataFrame {
+    pub fn empty() -> DataFrame {
+        let df = BaseDataFrame {
+            identity_index_map: Vec::new(),
+            header: Vec::new(),
+            data: Vec::new(),
+        };
+        InnerDataFrame::Base { df }.into()
+    }
+
     pub fn new(mut header: Vec<impl Into<String>>) -> DataFrame {
         let df = BaseDataFrame {
             identity_index_map: (0..header.len()).collect(),
