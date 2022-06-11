@@ -1,17 +1,17 @@
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Drain, HashMap},
     hash::Hash,
-    ops::{Deref, DerefMut},
+    ops::{Index, IndexMut},
 };
 
 use super::DataFrame;
 
 pub struct Groups<G: Eq + Hash> {
-    groups: Vec<(G, DataFrame)>,
+    groups: HashMap<G, DataFrame>,
 }
 
 impl<G: Eq + Hash> Groups<G> {
-    pub(super) fn new(groups: Vec<(G, DataFrame)>) -> Groups<G> {
+    pub(super) fn new(groups: HashMap<G, DataFrame>) -> Groups<G> {
         Groups { groups }
     }
 
@@ -30,23 +30,49 @@ impl<G: Eq + Hash> Groups<G> {
 
     pub fn filter<F>(mut self, mut filter: F) -> Groups<G>
     where
-        F: FnMut(&(G, DataFrame)) -> bool,
+        F: FnMut((&G, &DataFrame)) -> bool,
     {
-        self.groups.drain_filter(|group| !filter(group));
+        self.groups.drain_filter(|key, group| !filter((key, group)));
         self
     }
-}
 
-impl<G: Eq + Hash> Deref for Groups<G> {
-    type Target = Vec<(G, DataFrame)>;
+    pub fn iter(&self) -> impl Iterator<Item = (&G, &DataFrame)> {
+        self.groups.iter()
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.groups
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&G, &mut DataFrame)> {
+        self.groups.iter_mut()
+    }
+
+    pub fn drain(&mut self) -> Drain<'_, G, DataFrame> {
+        self.groups.drain()
     }
 }
 
-impl<G: Eq + Hash> DerefMut for Groups<G> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.groups
+impl<G: Eq + Hash> Index<&G> for Groups<G> {
+    type Output = DataFrame;
+
+    fn index(&self, index: &G) -> &Self::Output {
+        self.groups.get(index).expect("index out ouf bound")
+    }
+}
+
+impl<G: Eq + Hash> IndexMut<&G> for Groups<G> {
+    fn index_mut(&mut self, index: &G) -> &mut Self::Output {
+        self.groups.get_mut(index).expect("index out ouf bound")
+    }
+}
+
+impl<G: Eq + Hash> Index<G> for Groups<G> {
+    type Output = DataFrame;
+
+    fn index(&self, index: G) -> &Self::Output {
+        self.groups.get(&index).expect("index out ouf bound")
+    }
+}
+
+impl<G: Eq + Hash> IndexMut<G> for Groups<G> {
+    fn index_mut(&mut self, index: G) -> &mut Self::Output {
+        self.groups.get_mut(&index).expect("index out ouf bound")
     }
 }

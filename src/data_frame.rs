@@ -251,21 +251,21 @@ impl DataFrame {
             let vec: &mut Vec<_> = map.entry(key).or_default();
             vec.push(i);
         }
-        let mut map = map.drain().collect::<Vec<_>>();
-        //sort so we do not get non determinismus by using a Hashmap
-        map.sort_by_key(|(_g, vec)| vec[0]);
-        let mut groups = Vec::new();
-        for (key, index_map) in map {
-            groups.push((
-                key,
-                InnerDataFrame::LineReorder {
-                    df: self.clone(),
-                    index_map,
-                }
-                .into(),
-            ));
-        }
-        Groups::new(groups)
+
+        Groups::new(
+            map.drain()
+                .map(|(key, index_map)| {
+                    (
+                        key,
+                        InnerDataFrame::LineReorder {
+                            df: self.clone(),
+                            index_map,
+                        }
+                        .into(),
+                    )
+                })
+                .collect(),
+        )
     }
 
     pub fn header(&self) -> HeaderIter {

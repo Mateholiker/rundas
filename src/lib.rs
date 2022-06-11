@@ -8,6 +8,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(box_into_inner)]
 #![feature(round_char_boundary)]
+#![feature(hash_drain_filter)]
 
 mod data_frame;
 
