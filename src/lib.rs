@@ -12,4 +12,4 @@
 
 mod data_frame;
 
-pub use data_frame::{Data, DataFrame, Groups, SimpleDateTime};
+pub use data_frame::{Data, DataFrame, Groups, Line, SimpleDateTime};
