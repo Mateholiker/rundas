@@ -23,6 +23,11 @@ impl DataFrame {
         base.append_file(path, seperator, skip_first_line)?;
         Ok(InnerDataFrame::Base { df: base }.into())
     }
+
+    pub fn from_string(string: String, seperator: Option<char>) -> Result<DataFrame, IoError> {
+        let base = BaseDataFrame::from_string(string, seperator)?;
+        Ok(InnerDataFrame::Base { df: base }.into())
+    }
 }
 
 impl BaseDataFrame {
@@ -63,6 +68,32 @@ impl BaseDataFrame {
         let mut data = BaseDataFrame::get_data_from_file(&self.header, line_iter, seperator)?;
         self.append_lines(data.drain(..));
         Ok(())
+    }
+
+    fn from_string(string: String, seperator: Option<char>) -> Result<BaseDataFrame, IoError> {
+        let seperator = seperator.unwrap_or(',');
+        let mut line_iter = string.lines().enumerate();
+        let (_i, raw_header) = line_iter
+            .next()
+            .ok_or_else(|| IoError::other("String is empty"))?;
+        let header = BaseDataFrame::try_build_header(ChunkIter::from_str(raw_header, seperator))?;
+
+        let mut data = Vec::new();
+        for (i, line) in line_iter {
+            let chunk_iter = ChunkIter::from_str(line, seperator);
+            let line_data: Vec<Data> = chunk_iter.collect();
+
+            if line_data.len() != header.len() {
+                return Err(Self::create_error(i, &line_data, &header));
+            }
+            data.push(line_data);
+        }
+
+        Ok(BaseDataFrame {
+            identity_index_map: (0..header.len()).collect(),
+            header,
+            data,
+        })
     }
 
     fn get_data_from_file(
