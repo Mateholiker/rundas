@@ -90,6 +90,8 @@ impl Display for Data {
                     } else {
                         write!(f, " {:<9.8}   ", "Infinity")
                     }
+                } else if *float == 0.0 {
+                    write!(f, " {:<9.8}   ", "0")
                 } else {
                     let exp = float.abs().log(10.0).floor() as i32;
                     let significand = float / 10_f32.powi(exp);
