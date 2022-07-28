@@ -74,8 +74,38 @@ impl Display for Data {
         use Data::{Boolean, Date, Float, Integer, String, Vec2D, Vector};
         match self {
             String(string) => write!(f, "{}", string),
-            Integer(integer) => write!(f, "{}", integer),
-            Float(float) => write!(f, "{}", float),
+            Integer(integer) => {
+                if integer.is_negative() {
+                    write!(f, "-{:<10}  ", integer.abs())
+                } else {
+                    write!(f, " {integer:<10}  ")
+                }
+            }
+            Float(float) => {
+                if float.is_nan() {
+                    write!(f, " {:<9.8}   ", "NaN")
+                } else if float.is_infinite() {
+                    if float.is_sign_negative() {
+                        write!(f, "-{:<9.8}   ", "Infinity")
+                    } else {
+                        write!(f, " {:<9.8}   ", "Infinity")
+                    }
+                } else {
+                    let exp = float.abs().log(10.0).floor() as i32;
+                    let significand = float / 10_f32.powi(exp);
+
+                    let significand_string = if float.is_sign_negative() {
+                        format!("-{}", significand.abs())
+                    } else {
+                        format!(" {}", significand.abs())
+                    };
+                    if exp != 0 {
+                        write!(f, "{significand_string:<9.8}e{exp: >3}")
+                    } else {
+                        write!(f, "{significand_string:<9.8}    ")
+                    }
+                }
+            }
             Boolean(boolean) => write!(f, "{}", boolean),
             Date(dt) => {
                 write!(
