@@ -195,9 +195,9 @@ impl<'s> Iterator for ChunkIter<'s> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let trimed = self.string.trim_start();
-        let mut chars = trimed.char_indices();
+        let mut chars = trimed.char_indices().peekable();
 
-        if let Some((start_index, first)) = chars.next() {
+        if let Some(&(start_index, first)) = chars.peek() {
             if let Some((_start, end)) = GROUPING_SYMBOLE
                 .iter()
                 .find(|(start, _end)| *start == first)
