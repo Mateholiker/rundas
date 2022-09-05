@@ -67,6 +67,55 @@ impl Data {
             panic!("cannot convert {} to Vec2", self)
         }
     }
+
+    pub fn try_as_vec2d(&self) -> Option<(f32, f32)> {
+        if let Data::Vec2D(vec2d) = self {
+            Some(*vec2d)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_as_integer(&self) -> Option<i32> {
+        if let Data::Integer(int) = self {
+            Some(*int)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_as_float(&self) -> Option<f32> {
+        if let Data::Float(float) = self {
+            Some(*float)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_as_boolean(&self) -> Option<bool> {
+        if let Data::Boolean(boolean) = self {
+            Some(*boolean)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_as_date(&self) -> Option<SimpleDateTime> {
+        if let Data::Date(time_date) = self {
+            Some(*time_date)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_as_vec(&self) -> Option<&Vec<Data>> {
+        if let Data::Vector(ref vec) = self {
+            Some(vec)
+        } else {
+            None
+        }
+    }
+
 }
 
 impl Display for Data {
