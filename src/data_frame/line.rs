@@ -2,6 +2,7 @@ use std::ops::Index;
 
 use super::Data;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Line<'df> {
     header: &'df Vec<String>,
     line: &'df Vec<Data>,
