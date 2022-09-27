@@ -37,9 +37,13 @@ impl BaseDataFrame {
         let reader = BufReader::new(file);
 
         let mut line_iter = reader.lines().enumerate();
+
         let (_i, raw_header) = line_iter
             .next()
             .ok_or_else(|| IoError::other("File is empty"))?;
+
+        //trim an invisible char thats exel adds as an encoding hint
+        let raw_header = raw_header.map(|string| string.trim_matches('\u{feff}').to_owned());
         let header = BaseDataFrame::try_build_header(ChunkIter::from_str(&raw_header?, seperator))?;
 
         let data = BaseDataFrame::get_data_from_file(&header, line_iter, seperator)?;
